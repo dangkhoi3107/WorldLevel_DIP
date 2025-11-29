@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual env
+.env
+.venv
+env/
+venv/
+*.swp
+
+# VS Code / Jupyter
+.vscode/
+.ipynb_checkpoints/
+
+# Data – KHÔNG đưa lên git
+data_raw/
+data_npy/
+meta/filelist.csv
+debug_hand.mp4
+
+# Model / weights
+*.pth
+*.pt
+
+# Kaggle / cache
+.kaggle/
+.kagglehub/
+cache/

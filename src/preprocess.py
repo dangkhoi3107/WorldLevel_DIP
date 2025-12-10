@@ -26,57 +26,54 @@ hands = mp_hands.Hands(
 )
 
 def extract_keypoints_from_frame(image_bgr: np.ndarray) -> np.ndarray:
-    """Nhận 1 frame BGR → trả về vector (FEATURE_DIM,) chứa keypoints bàn tay."""
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     result = hands.process(image_rgb)
     keypoints = []
 
     if result.multi_hand_landmarks:
-        # lấy tay đầu tiên
         hand_landmarks = result.multi_hand_landmarks[0]
+
+        # 1. Lấy toạ độ gốc (Wrist - điểm số 0)
+        wrist = hand_landmarks.landmark[0]
+        wrist_x, wrist_y, wrist_z = wrist.x, wrist.y, wrist.z
+
         for lm in hand_landmarks.landmark:
-            keypoints.extend([lm.x, lm.y, lm.z])
+            # 2. Trừ đi toạ độ gốc để có toạ độ tương đối (Relative)
+            # Giúp model nhận diện được dù tay ở góc trái hay phải màn hình
+            relative_x = lm.x - wrist_x
+            relative_y = lm.y - wrist_y
+            relative_z = lm.z - wrist_z
+
+            keypoints.extend([relative_x, relative_y, relative_z])
 
     if len(keypoints) == 0:
-        # không thấy tay → vector 0
         keypoints = [0.0] * FEATURE_DIM
 
     return np.array(keypoints, dtype=np.float32)
 
 def video_to_seq(video_path: str, seq_len: int = SEQ_LEN) -> np.ndarray | None:
-    """Đọc 1 video → trả về tensor (SEQ_LEN, FEATURE_DIM)."""
     cap = cv2.VideoCapture(video_path)
     frames = []
-
-    if not cap.isOpened():
-        print(f"Cannot open video: {video_path}")
-        return None
-
+    # ... (đoạn đọc frame giữ nguyên) ...
     while True:
         ret, frame = cap.read()
-        if not ret:
-            break
-        kp = extract_keypoints_from_frame(frame)
+        if not ret: break
+        kp = extract_keypoints_from_frame(frame) # Gọi hàm đã sửa ở trên
         frames.append(kp)
-
     cap.release()
 
-    if len(frames) == 0:
-        print(f"No frames extracted from: {video_path}")
-        return None
+    if len(frames) == 0: return None
 
     frames = np.stack(frames, axis=0)  # (num_frames, FEATURE_DIM)
     num_frames = frames.shape[0]
 
-    if num_frames >= seq_len:
+    # CÁCH SỬA: Luôn luôn dùng Linear Interpolation để đưa về đúng seq_len
+    # Bất kể video ngắn hay dài, nó sẽ được co giãn đều ra 32 frames
+    if num_frames > 0:
         idxs = np.linspace(0, num_frames - 1, seq_len).astype(int)
         frames = frames[idxs]
-    else:
-        pad_len = seq_len - num_frames
-        pad = np.zeros((pad_len, FEATURE_DIM), dtype=np.float32)
-        frames = np.concatenate([frames, pad], axis=0)
 
-    return frames  # (SEQ_LEN, FEATURE_DIM)
+    return frames  # Luôn luôn là (SEQ_LEN, FEATURE_DIM)
 
 def preprocess_all(filelist_path: Path = FILELIST_PATH, out_root: Path = DATA_NPY_ROOT):
     out_root.mkdir(parents=True, exist_ok=True)

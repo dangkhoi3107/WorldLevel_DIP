@@ -4,74 +4,78 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-# project root = thư mục cha của src
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_NPY_ROOT = PROJECT_ROOT / "data_npy"
-META_DIR = PROJECT_ROOT / "meta"
-LABELS_PATH = META_DIR / "labels.txt"
+# ===== PATH =====
+try:
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
+except NameError:
+    PROJECT_ROOT = Path.cwd()
 
-def load_label_map(labels_path: Path = LABELS_PATH):
-    """Đọc labels.txt → {'book': 0, 'hello': 1, ...}"""
-    labels = []
-    if labels_path.exists():
-        with labels_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                l = line.strip()
-                if l:
-                    labels.append(l)
-    return {name: i for i, name in enumerate(labels)}
+DATA_NPY_ROOT = PROJECT_ROOT / "data_npy"
+
+
+def build_label_map_from_data(root_dir: Path):
+    """
+    Sinh label_map trực tiếp từ data_npy/
+    Chỉ lấy class có ít nhất 1 file .npy
+    """
+    classes = []
+    for d in sorted(os.listdir(root_dir)):
+        class_dir = root_dir / d
+        if class_dir.is_dir():
+            if any(f.endswith(".npy") for f in os.listdir(class_dir)):
+                classes.append(d)
+
+    label_map = {name: idx for idx, name in enumerate(classes)}
+    return label_map
+
 
 class WLASLKeypointDataset(Dataset):
-    """
-    Đọc các file .npy trong data_npy/<label_name>/*.npy
-    Mỗi sample: (SEQ_LEN, FEATURE_DIM), label_idx
-    """
-    # QUAN TRỌNG: Đã thêm tham số augment=False vào đây
-    def __init__(self, root_dir: Path | str = DATA_NPY_ROOT, label_map=None, augment=False):
+    def __init__(self, root_dir=DATA_NPY_ROOT, augment=False, target_len=32):
         self.root_dir = Path(root_dir)
-        self.augment = augment  # Lưu biến này để dùng trong __getitem__
+        self.augment = augment
+        self.target_len = target_len
 
-        if label_map is None:
-            self.label_map = load_label_map()
-        else:
-            self.label_map = label_map
+        # 🔥 label_map sinh từ data_npy
+        self.label_map = build_label_map_from_data(self.root_dir)
+        self.num_classes = len(self.label_map)
 
-        self.samples = []  # list[(path, label_idx)]
+        self.samples = []
 
         for label_name, idx in self.label_map.items():
             class_dir = self.root_dir / label_name
-            if not class_dir.is_dir():
-                continue
-
             for fname in os.listdir(class_dir):
                 if fname.endswith(".npy"):
-                    path = class_dir / fname
-                    self.samples.append((path, idx))
+                    self.samples.append((class_dir / fname, idx))
 
         if len(self.samples) == 0:
-            print(f"WARNING: Dataset trống tại {self.root_dir}. Hãy kiểm tra lại preprocess.")
+            raise RuntimeError("Dataset rỗng – kiểm tra data_npy")
+
+        print(f"[Dataset] Loaded {len(self.samples)} samples")
+        print(f"[Dataset] Num classes = {self.num_classes}")
 
     def __len__(self):
         return len(self.samples)
 
-    def __getitem__(self, index):
-        path, label = self.samples[index]
-        seq = np.load(path).astype(np.float32)  # (32, 63)
+    def pad_or_truncate(self, seq):
+        L, F = seq.shape
+        if L > self.target_len:
+            return seq[:self.target_len]
+        elif L < self.target_len:
+            pad = np.zeros((self.target_len - L, F), dtype=np.float32)
+            return np.vstack((seq, pad))
+        return seq
 
-        # --- DATA AUGMENTATION (Chỉ chạy khi self.augment = True) ---
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        seq = np.load(path).astype(np.float32)
+
+        seq = self.pad_or_truncate(seq)
+
+        # Augmentation (chỉ khi train)
         if self.augment:
-            # 1. Thêm nhiễu (Noise)
-            noise = np.random.normal(0, 0.005, seq.shape).astype(np.float32)
-            seq += noise
+            if np.random.rand() < 0.5:
+                seq *= np.random.uniform(0.9, 1.1)
+            if np.random.rand() < 0.5:
+                seq += np.random.normal(0, 0.002, seq.shape)
 
-            # 2. Co giãn (Scaling) - Phóng to/nhỏ biên độ cử chỉ
-            scale = np.random.uniform(0.9, 1.1)
-            seq *= scale
-
-            # 3. Dịch chuyển (Shifting) - Dời tay sang trái/phải/lên/xuống
-            # Shift chỉ áp dụng cho x, y (2/3 features), nhưng shift cả 3 cũng không sao
-            shift = np.random.uniform(-0.05, 0.05, size=(1, 63)).astype(np.float32)
-            seq += shift
-        # -----------------------------------------------------------
-
-        return seq, label
+        return torch.FloatTensor(seq), torch.tensor(label, dtype=torch.long)

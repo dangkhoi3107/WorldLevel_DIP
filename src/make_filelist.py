@@ -5,8 +5,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_RAW_ROOT = PROJECT_ROOT / "data_raw"
 META_DIR = PROJECT_ROOT / "meta"
-FILELIST_PATH = META_DIR / "filelist.csv"
-LABELS_PATH = META_DIR / "labels.txt"
+FILELIST_PATH = META_DIR / "filelist_1hand.csv"
+LABELS_PATH = META_DIR / "classes_only_1hand.txt"
 
 def load_label_set():
     labels = []

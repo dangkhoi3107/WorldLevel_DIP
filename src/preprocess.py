@@ -19,7 +19,7 @@ except NameError:
 DATA_RAW_ROOT = PROJECT_ROOT / "data_raw"
 DATA_NPY_ROOT = PROJECT_ROOT / "data_npy"
 META_DIR = PROJECT_ROOT / "meta"
-FILELIST_PATH = META_DIR / "filelist.csv"
+FILELIST_PATH = META_DIR / "filelist_1hand.csv"
 
 # Khởi tạo module (nhưng chưa khởi tạo object Hands ở đây)
 mp_hands = mp.solutions.hands

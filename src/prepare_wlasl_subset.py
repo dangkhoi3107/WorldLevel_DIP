@@ -11,7 +11,7 @@ KAGGLE_ROOT = "/home/dangkhoi/dev/Projects/WorldLevel_DIP/data_raw"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_RAW_ROOT = PROJECT_ROOT / "data_raw"
 META_DIR = PROJECT_ROOT / "meta"
-LABELS_PATH = META_DIR / "labels.txt"
+LABELS_PATH = META_DIR / "labels100.txt"
 JSON_PATH = Path(KAGGLE_ROOT) / "WLASL_v0.3.json"
 VIDEOS_DIR = Path(KAGGLE_ROOT) / "videos"
 
